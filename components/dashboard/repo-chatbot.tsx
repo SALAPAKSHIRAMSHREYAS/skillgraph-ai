@@ -12,7 +12,7 @@ interface ChatMessage {
 }
 
 const INITIAL_GREETING =
-  "Zero-Trust Engine ready. Ask me about the architectural complexity or repository anomalies."
+  "Zero-Trust Engine ready. Ask me about the architectural complexity, scanned repositories, or structural anomalies."
 
 export function RepoChatbot() {
   const [isOpen, setIsOpen] = useState(false)
@@ -58,22 +58,20 @@ export function RepoChatbot() {
 
     const lowerMsg = trimmed.toLowerCase()
 
-    // 1. Zero-Trust Boundary Trap (Instant Rejection)
-    const genericTriggers = [
-      "calculator",
-      "weather",
-      "capital of",
-      "recipe",
-      "joke",
-      "poem",
-      "write a python",
-      "write a script",
-      "who are you",
-      "hello",
-      "hi",
+    // 1. Strict Word-Boundary Traps for Off-Topic Queries
+    const offTopicPatterns = [
+      /\bcalculator\b/i,
+      /\bweather\b/i,
+      /\bcapital of\b/i,
+      /\brecipe\b/i,
+      /\bjoke\b/i,
+      /\bpoem\b/i,
+      /\bwrite a (script|code|python|function)\b/i,
+      /\bwho are you\b/i,
+      /^(hi|hello|hey|greetings)$/i,
     ]
 
-    if (genericTriggers.some((trigger) => lowerMsg.includes(trigger))) {
+    if (offTopicPatterns.some((pattern) => pattern.test(lowerMsg))) {
       setTimeout(() => {
         setMessages((prev) => [
           ...prev,
@@ -91,23 +89,38 @@ export function RepoChatbot() {
 
     // 2. Persona Detection from Live Page Context
     const pageText = typeof document !== "undefined" ? document.body.innerText.toLowerCase() : ""
-    const isCloner = pageText.includes("tutorial-cloner") || pageText.includes("18%")
+    const isIntegrator = pageText.includes("smart-integrator") || pageText.includes("integrator")
+    const isCloner = !isIntegrator && (pageText.includes("tutorial-cloner") || pageText.includes("18%"))
     const isLazy = pageText.includes("lazy-architect") || pageText.includes("42%")
 
     let fallbackResponse = ""
-    if (isCloner) {
+    if (isIntegrator) {
+      if (lowerMsg.includes("anomaly") || lowerMsg.includes("anomalies")) {
+        fallbackResponse =
+          "Notice: Foundational scaffolding matches public boilerplates (0.95 AUC). Delta-scan verifies original AST branching and custom mutations in user-authored modules."
+      } else if (lowerMsg.includes("complexity") || lowerMsg.includes("ast")) {
+        fallbackResponse =
+          "AST Breakdown: Underlying framework structure is cloned, but custom endpoints and business logic show Grade B+ cyclomatic complexity."
+      } else if (lowerMsg.includes("repo") || lowerMsg.includes("project") || lowerMsg.includes("commit")) {
+        fallbackResponse =
+          "Repository Telemetry: Scanned repositories utilize open-source foundational templates with verified custom feature layers and consistent commits."
+      } else {
+        fallbackResponse =
+          "Integrator Verified: 78% Authenticity Score. Demonstrates competent system integration and safe architecture modification."
+      }
+    } else if (isCloner) {
       if (lowerMsg.includes("anomaly") || lowerMsg.includes("anomalies")) {
         fallbackResponse =
           "CRITICAL ALERT: 3 structural anomalies detected. AST syntactic fingerprint matches 98% with public tutorial repositories; bulk imports are masquerading as authored work."
       } else if (lowerMsg.includes("complexity") || lowerMsg.includes("ast")) {
         fallbackResponse =
           "AST Breakdown: Cyclomatic complexity evaluated as Grade D. Shallow branching factors and boilerplate duplication confirm lack of original architecture."
-      } else if (lowerMsg.includes("real") || lowerMsg.includes("authentic") || lowerMsg.includes("score")) {
+      } else if (lowerMsg.includes("repo") || lowerMsg.includes("project") || lowerMsg.includes("commit")) {
         fallbackResponse =
-          "Zero-Trust Verdict: 18% Authenticity Score. 41 active repos demonstrate synthetic commit bursts and plagiarized syntax trees. High Risk profile."
+          "Repository Breakdown: Scanned repositories consist of identical directory structures and commit bursts matching indexed video tutorial repositories."
       } else {
         fallbackResponse =
-          "Zero-Trust Auditor: Target profile flagged for tutorial replication and authorship signature discontinuity across 41 repositories."
+          "Zero-Trust Verdict: 18% Authenticity Score. Syntactic tree analysis confirms plagiarized syntax trees and tutorial replication across repositories."
       }
     } else if (isLazy) {
       if (lowerMsg.includes("anomaly") || lowerMsg.includes("anomalies")) {
@@ -124,9 +137,9 @@ export function RepoChatbot() {
       } else if (lowerMsg.includes("complexity") || lowerMsg.includes("ast")) {
         fallbackResponse =
           "AST Breakdown: Modular control-flow graphs evaluated at Grade A. High cohesion and clean separation of concerns verified across modules."
-      } else if (lowerMsg.includes("real") || lowerMsg.includes("authentic") || lowerMsg.includes("score")) {
+      } else if (lowerMsg.includes("repo") || lowerMsg.includes("project") || lowerMsg.includes("commit")) {
         fallbackResponse =
-          "Zero-Trust Verdict: Authenticity verified above 90%. Syntactic tree analysis confirms genuine, iterative software engineering patterns."
+          "Repository Audit: Scanned repositories show consistent multi-file edits, high syntactic entropy, and iterative development history."
       } else {
         fallbackResponse =
           "Zero-Trust Telemetry: AST parsing confirms original algorithmic logic with high confidence and clean entropy metrics."
@@ -177,9 +190,9 @@ export function RepoChatbot() {
   return (
     <div className="fixed bottom-6 right-6 z-50">
       {isOpen && (
-        <div className="absolute bottom-16 right-0 flex h-[500px] w-[400px] flex-col overflow-hidden rounded-xl border border-white/10 bg-gray-900 shadow-2xl">
+        <div className="absolute bottom-16 right-0 flex h-[500px] w-[400px] flex-col overflow-hidden rounded-xl border border-white/10 bg-[#0d1117] shadow-2xl">
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-white/10 bg-white/5 px-4 py-3">
+          <div className="flex items-center justify-between border-b border-white/10 bg-white/[0.03] px-4 py-3">
             <div className="flex items-center gap-2.5">
               <div className="flex size-8 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400">
                 <Shield className="size-4" />
@@ -188,7 +201,7 @@ export function RepoChatbot() {
                 <h3 className="text-sm font-semibold tracking-tight text-white">
                   Zero-Trust AI Chatbot
                 </h3>
-                <p className="font-mono text-[10px] uppercase tracking-wider text-white/50">
+                <p className="font-mono text-[10px] uppercase tracking-wider text-gray-400">
                   Repo intelligence · offline-first audit
                 </p>
               </div>
@@ -201,7 +214,7 @@ export function RepoChatbot() {
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
-                className="flex size-7 items-center justify-center rounded-lg text-white/50 transition-colors hover:bg-white/10 hover:text-white"
+                className="flex size-7 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
                 aria-label="Close chat"
               >
                 <X className="size-4" />
@@ -238,7 +251,7 @@ export function RepoChatbot() {
                   className={`max-w-[85%] rounded-xl px-3 py-2 text-[13px] leading-relaxed ${
                     msg.role === "ai"
                       ? "border border-white/10 bg-white/5 text-white/90"
-                      : "bg-indigo-500/90 text-white"
+                      : "bg-indigo-600 text-white"
                   }`}
                 >
                   {msg.content}
@@ -251,7 +264,7 @@ export function RepoChatbot() {
                 <div className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400">
                   <Bot className="size-3.5" />
                 </div>
-                <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[12px] text-white/50">
+                <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[12px] text-gray-400">
                   <Loader2 className="size-3.5 animate-spin text-emerald-400" />
                   Analyzing repository signals…
                 </div>
@@ -260,22 +273,22 @@ export function RepoChatbot() {
           </div>
 
           {/* Composer */}
-          <form onSubmit={handleSubmit} className="border-t border-white/10 bg-white/[0.03] p-3">
-            <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/30 px-2.5 py-1.5 focus-within:border-indigo-500/40 focus-within:ring-1 focus-within:ring-indigo-500/20">
+          <form onSubmit={handleSubmit} className="border-t border-white/10 bg-white/[0.02] p-3">
+            <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/40 px-2.5 py-1.5 focus-within:border-indigo-500/40">
               <input
                 ref={inputRef}
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Ask about complexity, anomalies, authorship…"
+                placeholder="Ask about complexity, anomalies, repos…"
                 disabled={isLoading}
-                className="min-w-0 flex-1 bg-transparent px-1.5 py-1.5 text-[13px] text-white outline-none placeholder:text-white/40 disabled:opacity-50"
+                className="min-w-0 flex-1 bg-transparent px-1.5 py-1.5 text-[13px] text-white outline-none placeholder:text-gray-500 disabled:opacity-50"
                 aria-label="Chat message"
               />
               <button
                 type="submit"
                 disabled={isLoading || !input.trim()}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-500 px-3 py-1.5 text-xs font-semibold text-white shadow-md transition-colors hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-40"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-md transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <Send className="size-3.5" />
                 Send
