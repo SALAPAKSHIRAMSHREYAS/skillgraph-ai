@@ -8,7 +8,9 @@ Start with:
 import asyncio
 import logging
 import os
-from typing import Any, Dict, List
+import time
+from collections import defaultdict, deque
+from typing import Any, Deque, Dict, List
 
 import httpx
 from dotenv import load_dotenv
@@ -39,6 +41,14 @@ logger = logging.getLogger(__name__)
 # Rate limiter  (in-memory; swap backend for Redis in production)
 # ---------------------------------------------------------------------------
 limiter = Limiter(key_func=get_remote_address, default_limits=["60/minute"])
+
+# IP rate limit: 5 requests per 10-second sliding window
+IP_RATE_LIMIT = 5
+IP_RATE_WINDOW_SECONDS = 10.0
+_ip_request_log: Dict[str, Deque[float]] = defaultdict(deque)
+
+# Spam/bot trap: flag accounts with an unrealistically high public repo count
+SPAM_REPO_THRESHOLD = 1_000
 
 # ---------------------------------------------------------------------------
 # App setup
@@ -79,6 +89,42 @@ app.add_middleware(SecurityLoggingMiddleware)
 MAX_BODY_BYTES = 1_024
 
 
+def _client_ip(request: Request) -> str:
+    """Resolve client IP (honours first X-Forwarded-For hop when present)."""
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    if request.client:
+        return request.client.host
+    return "unknown"
+
+
+@app.middleware("http")
+async def ip_rate_limit(request: Request, call_next):
+    """Block clients that exceed 5 requests per 10 seconds (sliding window)."""
+    # Keep health checks usable for load balancers / uptime monitors
+    if request.url.path == "/health":
+        return await call_next(request)
+
+    ip = _client_ip(request)
+    now = time.monotonic()
+    window_start = now - IP_RATE_WINDOW_SECONDS
+    timestamps = _ip_request_log[ip]
+
+    while timestamps and timestamps[0] <= window_start:
+        timestamps.popleft()
+
+    if len(timestamps) >= IP_RATE_LIMIT:
+        logger.warning("IP rate limit exceeded for %s on %s", ip, request.url.path)
+        return JSONResponse(
+            status_code=429,
+            content={"detail": "Too many requests. Limit is 5 requests per 10 seconds."},
+        )
+
+    timestamps.append(now)
+    return await call_next(request)
+
+
 @app.middleware("http")
 async def limit_body_size(request: Request, call_next):
     content_length = request.headers.get("content-length")
@@ -96,9 +142,16 @@ async def limit_body_size(request: Request, call_next):
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     logger.warning("Validation error on %s: %s", request.url.path, exc.errors())
+    # Strip non-JSON-serializable ctx values (e.g. raw ValueError instances)
+    safe_errors = []
+    for err in exc.errors():
+        clean = {k: v for k, v in err.items() if k != "ctx"}
+        if "ctx" in err:
+            clean["ctx"] = {ck: str(cv) for ck, cv in err["ctx"].items()}
+        safe_errors.append(clean)
     return JSONResponse(
         status_code=422,
-        content={"detail": "Invalid request data.", "errors": exc.errors()},
+        content={"detail": "Invalid request data.", "errors": safe_errors},
     )
 
 
@@ -151,14 +204,35 @@ async def audit(request: Request, body: AuditRequest):
         raise HTTPException(status_code=504, detail="Audit timed out. Try again later.")
 
 
-async def _run_audit(username: str) -> AuditResponse:
+async def _run_audit(username: str) -> AuditResponse | JSONResponse:
     """Core audit logic, separated so it can be wrapped with a timeout."""
 
     async with httpx.AsyncClient() as client:
         # ------------------------------------------------------------------ #
-        # Phase 1 — Fetch repositories                                        #
+        # Phase 1 — Fetch user profile + repositories                         #
         # ------------------------------------------------------------------ #
         try:
+            user_profile = await github_client.fetch_user(client, username)
+            public_repo_count = int(user_profile.get("public_repos") or 0)
+
+            # Spam/Bot Trap: unrealistically high repo count → block for review
+            if public_repo_count > SPAM_REPO_THRESHOLD:
+                logger.warning(
+                    "Spam/Bot trap triggered for user=%s public_repos=%d",
+                    username,
+                    public_repo_count,
+                )
+                return JSONResponse(
+                    status_code=403,
+                    content={
+                        "status": "blocked",
+                        "reason": (
+                            "Spam/Bot detection triggered. "
+                            "Account flagged for manual review."
+                        ),
+                    },
+                )
+
             repos = await github_client.fetch_repos(client, username, limit=REPOS_FETCH_LIMIT)
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc))
@@ -172,7 +246,7 @@ async def _run_audit(username: str) -> AuditResponse:
         if not repos:
             return _empty_audit_response(username, reason="No public repositories found.")
 
-        total_repos = len(repos)
+        total_repos = public_repo_count if public_repo_count > 0 else len(repos)
         repos_to_analyze = repos[:REPOS_ANALYZE_LIMIT]
 
         # ------------------------------------------------------------------ #

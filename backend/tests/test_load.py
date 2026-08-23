@@ -33,6 +33,7 @@ _REQUIRED_KEYS = {
 
 def _patched_audit_call(username: str):
     with (
+        patch("main.github_client.fetch_user", new_callable=AsyncMock) as mock_user,
         patch("main.github_client.fetch_repos", new_callable=AsyncMock) as mock_repos,
         patch("main.github_client.fetch_commits", new_callable=AsyncMock) as mock_commits,
         patch("main.github_client.fetch_languages", new_callable=AsyncMock) as mock_langs,
@@ -40,6 +41,7 @@ def _patched_audit_call(username: str):
         patch("main.github_client.fetch_file_content", new_callable=AsyncMock) as mock_file,
         patch("main.llm_evidence.generate_evidence", new_callable=AsyncMock) as mock_llm,
     ):
+        mock_user.return_value = {"public_repos": 1}
         mock_repos.return_value = _MOCK_REPOS
         mock_commits.return_value = _MOCK_COMMITS
         mock_langs.return_value = {}
@@ -69,8 +71,8 @@ class TestConcurrentRequests:
 
     def test_error_request_does_not_affect_next(self):
         """A failed request should not break the next successful one."""
-        with patch("main.github_client.fetch_repos", new_callable=AsyncMock) as mock_repos:
-            mock_repos.side_effect = ValueError("GitHub user 'baduser' not found")
+        with patch("main.github_client.fetch_user", new_callable=AsyncMock) as mock_user:
+            mock_user.side_effect = ValueError("GitHub user 'baduser' not found")
             resp_fail = client.post("/api/audit", json={"username": "baduser"})
         assert resp_fail.status_code == 404
 

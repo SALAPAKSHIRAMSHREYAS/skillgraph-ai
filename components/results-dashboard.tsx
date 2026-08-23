@@ -11,6 +11,7 @@ import { RepoTable } from "@/components/dashboard/repo-table"
 import { CompareModal } from "@/components/dashboard/compare-modal"
 import { ExportModal } from "@/components/dashboard/export-modal"
 import { EngineTraceModal } from "@/components/dashboard/engine-trace-modal"
+import { RepoChatbot } from "@/components/dashboard/repo-chatbot"
 import type { Profile } from "@/lib/mock-profiles"
 
 export const ResultsDashboard = forwardRef<HTMLElement, { profile: Profile }>(function ResultsDashboard(
@@ -152,6 +153,8 @@ export const ResultsDashboard = forwardRef<HTMLElement, { profile: Profile }>(fu
           onClose={() => setIsTraceOpen(false)}
         />
       )}
+
+      <RepoChatbot />
     </section>
   )
 })

@@ -47,6 +47,32 @@ def _is_safe_path(path: str) -> bool:
     return bool(_SAFE_PATH_RE.match(path))
 
 
+async def fetch_user(
+    client: httpx.AsyncClient,
+    username: str,
+) -> Dict[str, Any]:
+    """Return the GitHub user profile (includes public_repos for bot-trap checks)."""
+    url = f"{_BASE}/users/{username}"
+    try:
+        resp = await client.get(url, headers=_headers(), timeout=_TIMEOUT)
+        if resp.status_code == 404:
+            raise ValueError(f"GitHub user '{username}' not found")
+        if resp.status_code == 403:
+            logger.warning("GitHub rate-limit hit fetching user=%s", username)
+            raise httpx.HTTPStatusError("Rate limited", request=resp.request, response=resp)
+        resp.raise_for_status()
+        return resp.json()
+    except httpx.HTTPStatusError as exc:
+        logger.error("GitHub user fetch failed: status=%d", exc.response.status_code)
+        raise
+    except httpx.TimeoutException:
+        logger.error("GitHub user fetch timed out for user=%s", username)
+        raise httpx.RequestError("Timeout fetching user")
+    except httpx.RequestError as exc:
+        logger.error("GitHub request error fetching user: %s", type(exc).__name__)
+        raise
+
+
 async def fetch_repos(
     client: httpx.AsyncClient,
     username: str,

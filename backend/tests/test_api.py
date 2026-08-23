@@ -59,6 +59,7 @@ class TestAuditEndpoint:
         resp = client.post("/api/audit", json={})
         assert resp.status_code == 422
 
+    @patch("main.github_client.fetch_user", new_callable=AsyncMock)
     @patch("main.github_client.fetch_repos", new_callable=AsyncMock)
     @patch("main.github_client.fetch_commits", new_callable=AsyncMock)
     @patch("main.github_client.fetch_languages", new_callable=AsyncMock)
@@ -73,7 +74,9 @@ class TestAuditEndpoint:
         mock_langs,
         mock_commits,
         mock_repos,
+        mock_user,
     ):
+        mock_user.return_value = {"public_repos": 1}
         mock_repos.return_value = _MOCK_REPOS
         mock_commits.return_value = _MOCK_COMMITS
         mock_langs.return_value = _MOCK_LANGUAGES
@@ -98,19 +101,28 @@ class TestAuditEndpoint:
         assert data["linesAnalyzed"] == "N/A"
         assert isinstance(data["repos"], list)
 
-    @patch("main.github_client.fetch_repos", new_callable=AsyncMock)
-    def test_unknown_github_user_returns_404(self, mock_repos):
-        mock_repos.side_effect = ValueError("GitHub user 'nobody' not found")
+    @patch("main.github_client.fetch_user", new_callable=AsyncMock)
+    def test_unknown_github_user_returns_404(self, mock_user):
+        mock_user.side_effect = ValueError("GitHub user 'nobody' not found")
         resp = client.post("/api/audit", json={"username": "nobody"})
         assert resp.status_code == 404
 
-    @patch("main.github_client.fetch_repos", new_callable=AsyncMock)
-    def test_github_api_failure_returns_502(self, mock_repos):
+    @patch("main.github_client.fetch_user", new_callable=AsyncMock)
+    def test_github_api_failure_returns_502(self, mock_user):
         import httpx
-        mock_repos.side_effect = httpx.HTTPStatusError(
+        mock_user.side_effect = httpx.HTTPStatusError(
             "server error",
             request=MagicMock(),
             response=MagicMock(status_code=500),
         )
         resp = client.post("/api/audit", json={"username": "testuser"})
         assert resp.status_code == 502
+
+    @patch("main.github_client.fetch_user", new_callable=AsyncMock)
+    def test_spam_bot_trap_blocks_high_repo_count(self, mock_user):
+        mock_user.return_value = {"public_repos": 1001}
+        resp = client.post("/api/audit", json={"username": "spammy"})
+        assert resp.status_code == 403
+        data = resp.json()
+        assert data["status"] == "blocked"
+        assert "Spam/Bot detection" in data["reason"]

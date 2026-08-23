@@ -108,17 +108,17 @@ class TestSafeErrorResponses:
         assert "Traceback" not in body
         assert "File " not in body
 
-    @patch("main.github_client.fetch_repos", new_callable=AsyncMock)
-    def test_502_has_no_traceback(self, mock_repos):
-        mock_repos.side_effect = httpx.RequestError("connection failed")
+    @patch("main.github_client.fetch_user", new_callable=AsyncMock)
+    def test_502_has_no_traceback(self, mock_user):
+        mock_user.side_effect = httpx.RequestError("connection failed")
         resp = client.post("/api/audit", json={"username": "testuser"})
         assert resp.status_code == 502
         assert "Traceback" not in resp.text
         assert "connection failed" not in resp.text  # internal message not leaked
 
-    @patch("main.github_client.fetch_repos", new_callable=AsyncMock)
-    def test_404_has_no_traceback(self, mock_repos):
-        mock_repos.side_effect = ValueError("GitHub user 'nobody' not found")
+    @patch("main.github_client.fetch_user", new_callable=AsyncMock)
+    def test_404_has_no_traceback(self, mock_user):
+        mock_user.side_effect = ValueError("GitHub user 'nobody' not found")
         resp = client.post("/api/audit", json={"username": "nobody"})
         assert resp.status_code == 404
         assert "Traceback" not in resp.text
@@ -129,27 +129,27 @@ class TestSafeErrorResponses:
 # ---------------------------------------------------------------------------
 
 class TestGitHubErrorMapping:
-    @patch("main.github_client.fetch_repos", new_callable=AsyncMock)
-    def test_github_403_maps_to_429(self, mock_repos):
+    @patch("main.github_client.fetch_user", new_callable=AsyncMock)
+    def test_github_403_maps_to_429(self, mock_user):
         mock_request = MagicMock()
         mock_response = MagicMock(status_code=403)
-        mock_repos.side_effect = httpx.HTTPStatusError(
+        mock_user.side_effect = httpx.HTTPStatusError(
             "forbidden", request=mock_request, response=mock_response
         )
         resp = client.post("/api/audit", json={"username": "testuser"})
         assert resp.status_code == 429
 
-    @patch("main.github_client.fetch_repos", new_callable=AsyncMock)
-    def test_github_404_maps_to_404(self, mock_repos):
-        mock_repos.side_effect = ValueError("GitHub user 'nobody' not found")
+    @patch("main.github_client.fetch_user", new_callable=AsyncMock)
+    def test_github_404_maps_to_404(self, mock_user):
+        mock_user.side_effect = ValueError("GitHub user 'nobody' not found")
         resp = client.post("/api/audit", json={"username": "nobody"})
         assert resp.status_code == 404
 
-    @patch("main.github_client.fetch_repos", new_callable=AsyncMock)
-    def test_github_500_maps_to_502(self, mock_repos):
+    @patch("main.github_client.fetch_user", new_callable=AsyncMock)
+    def test_github_500_maps_to_502(self, mock_user):
         mock_request = MagicMock()
         mock_response = MagicMock(status_code=500)
-        mock_repos.side_effect = httpx.HTTPStatusError(
+        mock_user.side_effect = httpx.HTTPStatusError(
             "server error", request=mock_request, response=mock_response
         )
         resp = client.post("/api/audit", json={"username": "testuser"})
@@ -161,8 +161,10 @@ class TestGitHubErrorMapping:
 # ---------------------------------------------------------------------------
 
 class TestEmptyStateHandling:
+    @patch("main.github_client.fetch_user", new_callable=AsyncMock)
     @patch("main.github_client.fetch_repos", new_callable=AsyncMock)
-    def test_empty_repo_list_returns_valid_response(self, mock_repos):
+    def test_empty_repo_list_returns_valid_response(self, mock_repos, mock_user):
+        mock_user.return_value = {"public_repos": 0}
         mock_repos.return_value = []
         resp = client.post("/api/audit", json={"username": "emptyuser"})
         assert resp.status_code == 200
@@ -172,13 +174,15 @@ class TestEmptyStateHandling:
         assert data["riskLevel"] == "High Risk"
         assert "No public" in data["riskMessage"]
 
+    @patch("main.github_client.fetch_user", new_callable=AsyncMock)
     @patch("main.github_client.fetch_repos", new_callable=AsyncMock)
     @patch("main.github_client.fetch_commits", new_callable=AsyncMock)
     @patch("main.github_client.fetch_languages", new_callable=AsyncMock)
     @patch("main.llm_evidence.generate_evidence", new_callable=AsyncMock)
     def test_all_repos_fail_returns_valid_response(
-        self, mock_llm, mock_langs, mock_commits, mock_repos
+        self, mock_llm, mock_langs, mock_commits, mock_repos, mock_user
     ):
+        mock_user.return_value = {"public_repos": 1}
         mock_repos.return_value = _MOCK_REPOS
         mock_commits.side_effect = Exception("network failure")
         mock_langs.return_value = {}
@@ -188,7 +192,6 @@ class TestEmptyStateHandling:
         assert resp.status_code == 200
         data = resp.json()
         assert "riskMessage" in data
-
 
 # ---------------------------------------------------------------------------
 # File path traversal protection
