@@ -24,7 +24,7 @@ export function SkillgraphApp() {
   const pushToast = useCallback((message: string, variant: Toast["variant"] = "success") => {
     const id = Date.now() + Math.random()
     setToasts((prev) => [...prev, { id, message, variant }])
-    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 3600)
+    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 4500)
   }, [])
 
   const scrollToSearch = () => {
@@ -151,6 +151,19 @@ export function SkillgraphApp() {
       return
     }
 
+    // Known spam / massive bot trap handles (instant demo verification)
+    const highVolumeOrgs = ["google", "microsoft", "apache", "aws", "sindresorhus"]
+    if (highVolumeOrgs.includes(cleanUser.toLowerCase()) && demoMode) {
+      timerRef.current = setTimeout(() => {
+        setLoading(false)
+        pushToast(
+          `🛡️ SPAM/BOT TRAP TRIGGERED: @${cleanUser} exceeds 1,000 repositories. Execution halted for manual review.`,
+          "error"
+        )
+      }, 700)
+      return
+    }
+
     if (!demoMode) {
       try {
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://skillgraph-ai-igaf.onrender.com"
@@ -160,6 +173,24 @@ export function SkillgraphApp() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ username: cleanUser }),
         })
+
+        // Handle 403 Spam/Bot Defense Block
+        if (response.status === 403) {
+          const blockedData = await response.json()
+          setLoading(false)
+          pushToast(
+            `🛡️ ${blockedData.reason || "Spam/Bot detection triggered (>1,000 repos). Account flagged for manual review."}`,
+            "error"
+          )
+          return
+        }
+
+        // Handle Rate Limiter (429)
+        if (response.status === 429) {
+          setLoading(false)
+          pushToast("Rate limit exceeded: 5 requests per 10s window. Please wait a moment.", "error")
+          return
+        }
 
         if (!response.ok) {
           throw new Error(`Audit request failed with status ${response.status}`)
@@ -187,7 +218,7 @@ export function SkillgraphApp() {
       setLoading(false)
 
       if (!resolved) {
-        pushToast(`No demo profile found for "${cleanUser}". Try a persona chip above.`, "error")
+        pushToast(`No demo profile found for "${cleanUser}". Try a persona chip above or toggle Live API mode.`, "error")
         return
       }
 

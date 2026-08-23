@@ -61,7 +61,7 @@ export function RepoChatbot() {
 
     const lowerMsg = trimmed.toLowerCase()
 
-    // 1. Zero-Trust Boundary Trap (Strict client-side filter)
+    // 1. Zero-Trust Boundary Trap (Instant client-side safety trigger)
     const genericTriggers = [
       "calculator",
       "weather",
@@ -88,17 +88,23 @@ export function RepoChatbot() {
           },
         ])
         setIsLoading(false)
-      }, 400)
+      }, 300)
       return
     }
 
-    // 2. Fetch live response from deployed Render FastAPI backend
+    // 2. Fetch from Render Backend with 2.5s Timeout Guard
+    let backendSuccess = false
+    const controller = new AbortController()
+    const abortTimeout = setTimeout(() => controller.abort(), 2500)
+
     try {
       const res = await fetch(`${BACKEND_BASE_URL}/api/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: trimmed }),
+        signal: controller.signal,
       })
+      clearTimeout(abortTimeout)
 
       if (res.ok) {
         const data = await res.json()
@@ -108,15 +114,21 @@ export function RepoChatbot() {
             ...prev,
             { id: `ai-${Date.now()}`, role: "ai", content: replyText },
           ])
-          setIsLoading(false)
-          return
+          backendSuccess = true
         }
       }
     } catch {
-      // Backend unreachable or waking from Render free-tier cold start: fall back to dynamic engine
+      // Fetch timed out or network offline; proceed to dynamic telemetry fallback
+    } finally {
+      clearTimeout(abortTimeout)
     }
 
-    // 3. Persona-Aware Dynamic Telemetry Engine
+    if (backendSuccess) {
+      setIsLoading(false)
+      return
+    }
+
+    // 3. Instant Persona-Aware Telemetry Fallback
     setTimeout(() => {
       let dynamicReply = ""
       const pageContent =
@@ -181,7 +193,7 @@ export function RepoChatbot() {
         },
       ])
       setIsLoading(false)
-    }, 450)
+    }, 350)
   }
 
   return (
