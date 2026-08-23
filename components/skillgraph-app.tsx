@@ -1,7 +1,7 @@
 "use client"
 
-import React, { useState, useEffect, useRef, useCallback, FormEvent,useId } from "react"
-import { motion, AnimatePresence, usePresence } from "motion/react"
+import React, { useState, useEffect, useRef, useCallback, FormEvent, useId } from "react"
+import { motion, AnimatePresence, usePresence, type Variants } from "motion/react"
 import {
   ShieldCheck,
   GitCommit,
@@ -22,7 +22,7 @@ import { RepoChatbot } from "@/components/dashboard/repo-chatbot"
 import { resolveProfile, type Profile } from "@/lib/mock-profiles"
 
 // ---------------------------------------------------------------------------
-// Sand / Particle Dissolve Transition Component (SVG Filter-based)
+// Sand / Particle Dissolve Transition Component (Hydration-Safe SVG Filter)
 // ---------------------------------------------------------------------------
 function SandTransitionImage({
   src,
@@ -144,19 +144,21 @@ const chaptersData = [
 ]
 
 // ---------------------------------------------------------------------------
-// Animation Variants
+// Animation Variants (Strictly Typed)
 // ---------------------------------------------------------------------------
-const fadeUp = {
+const fadeUp: Variants = {
   initial: { opacity: 0, y: 20 },
   animate: { opacity: 1, y: 0 },
 }
 
-const letterBlock = {
+const cubicEase: [number, number, number, number] = [0.16, 1, 0.3, 1]
+
+const letterBlock: Variants = {
   initial: { y: 100, opacity: 0 },
   animate: {
     y: 0,
     opacity: 1,
-    transition: { duration: 1.1, ease: [0.16, 1, 0.3, 1] },
+    transition: { duration: 1.1, ease: cubicEase },
   },
 }
 
@@ -189,168 +191,64 @@ export function SkillgraphApp() {
   }
 
   const normalizeProfile = (data: any, targetUser: string): Profile => {
-    const complexityGrade =
-      data.complexityGrade ??
-      data.grade ??
-      (typeof data.metrics?.avgComplexity === "number"
-        ? data.metrics.avgComplexity >= 8
-          ? "A+"
-          : data.metrics.avgComplexity >= 6
-            ? "A"
-            : data.metrics.avgComplexity >= 4
-              ? "B"
-              : "D"
-        : undefined)
-
-    const isHighComplexity = complexityGrade === "A" || complexityGrade === "A+"
-
-    let baseScore =
-      typeof data.authenticityScore === "number"
-        ? data.authenticityScore
-        : typeof data.score === "number" && data.score > 0
-          ? data.score
-          : undefined
-
-    if (baseScore == null) {
-      baseScore = targetUser.includes("clone") ||
-        targetUser.includes("fake") ||
-        targetUser.includes("tutorial")
-        ? 18
-        : 94
-    }
-
-    // High-complexity code should not be visually flagged as clone-tier due to low commit volume
-    if (isHighComplexity && baseScore < 50) {
-      baseScore = Math.max(baseScore, 75)
-    }
-
+    const isIntegrator = targetUser.includes("integrator")
     const isSuspicious =
-      !isHighComplexity &&
+      !isIntegrator &&
       (targetUser.includes("clone") ||
         targetUser.includes("fake") ||
         targetUser.includes("tutorial") ||
         (typeof data?.score === "number" && data.score < 50) ||
         (typeof data?.authenticityScore === "number" && data.authenticityScore < 50))
 
-    const fallbackMock = resolveProfile(isSuspicious ? "tutorial-cloner" : "authentic-dev")
+    let baseScore =
+      typeof data.authenticityScore === "number"
+        ? data.authenticityScore
+        : typeof data.score === "number" && data.score > 0
+          ? data.score
+          : isIntegrator
+            ? 78
+            : isSuspicious
+              ? 18
+              : 94
 
-    const mapSkillToChart = (s: any, idx: number) => {
-      const subject =
-        typeof s === "string" ? s : s.subject || s.name || `Skill ${idx + 1}`
-      const scoreValue =
-        s.score ?? s.verified ?? (isSuspicious ? 25 : 85 + (idx % 10))
-      const verified = Number(s.verified ?? scoreValue ?? 0)
-      const claimed = Number(
-        s.claimed ??
-          (s.score != null ? Math.min(100, Number(s.score) + 6) : undefined) ??
-          (isSuspicious ? 90 : Math.min(100, verified + 5)),
-      )
-
-      return {
-        subject,
-        name: subject,
-        verified: Number.isFinite(verified) ? verified : 0,
-        claimed: Number.isFinite(claimed) ? claimed : 0,
-        fullMark: 100,
-        level: typeof s === "object" ? s.level || "Advanced" : "Advanced",
-        repoCount: s.repoCount ?? idx + 2,
-        evidence: s.evidence || `AST nodes parsed across ${idx + 2} repositories`,
-      }
+    // Balance score: if code architecture is Grade A, floor score to at least 75
+    if (data?.complexityGrade === "A" && baseScore < 50) {
+      baseScore = 75
     }
+
+    const fallbackMock = resolveProfile(
+      isIntegrator ? "smart-integrator" : isSuspicious ? "tutorial-cloner" : "authentic-dev"
+    )
 
     const rawRepos = data.repositories || data.repos || []
     const normalizedRepos = rawRepos.length > 0
       ? rawRepos.map((r: any, idx: number) => ({
           name: r.name || `repo-${idx + 1}`,
           language: r.lang || r.language || (idx % 2 === 0 ? "TypeScript" : "Python"),
-          originality: r.originality ?? r.authenticity ?? (isSuspicious ? 22 : 92),
+          originality: r.originality ?? r.authenticity ?? (isIntegrator ? 80 : isSuspicious ? 22 : 92),
           commits: r.commits ?? (isSuspicious ? 2 : 10),
           lastPush: r.lastPush || "Recent",
           status: (r.status?.toLowerCase() === "verified" || (!isSuspicious && idx < 3)) ? "verified" : "flagged",
         }))
       : fallbackMock?.repositories || []
 
-    const totalRepoCommits = normalizedRepos.reduce((acc: number, r: any) => acc + (Number(r.commits) || 0), 0)
-    const exactCommitsRaw = data.totalCommits ?? data.commits ?? (totalRepoCommits > 0 ? totalRepoCommits : undefined)
-    const exactCommits = Number.isFinite(Number(exactCommitsRaw))
-      ? Number(exactCommitsRaw)
-      : isSuspicious
-        ? 14
-        : 17
-
-    const entropyScore =
-      data.metrics?.entropyScore ??
-      data.radar?.gitEntropy ??
-      (isSuspicious ? 0.31 : 0.91)
-    const entropyPct = Math.round(
-      typeof entropyScore === "number" && entropyScore <= 1
-        ? entropyScore * 100
-        : Number(entropyScore) || (isSuspicious ? 30 : 88),
-    )
-
-    const radarMetrics = {
-      codeAuthenticity: baseScore,
-      gitEntropy: data.radar?.gitEntropy ?? entropyPct,
-      skillDepth:
-        data.radar?.skillDepth ??
-        (normalizedRepos.length > 0
-          ? Math.min(100, Math.round(baseScore * 0.95))
-          : isSuspicious
-            ? 25
-            : 92),
-      commitRegularity:
-        data.radar?.commitRegularity ??
-        (exactCommits > 0
-          ? Math.min(100, Math.round(Math.log10(exactCommits + 1) * 28))
-          : isSuspicious
-            ? 20
-            : 85),
-      dependencyHealth: data.radar?.dependencyHealth ?? (isSuspicious ? 45 : 94),
-    }
-
-    const radarChart = [
-      {
-        subject: "Code Authenticity",
-        verified: radarMetrics.codeAuthenticity,
-        claimed: Math.min(100, radarMetrics.codeAuthenticity + 5),
-        fullMark: 100,
-      },
-      {
-        subject: "Git Entropy",
-        verified: radarMetrics.gitEntropy,
-        claimed: Math.min(100, radarMetrics.gitEntropy + 4),
-        fullMark: 100,
-      },
-      {
-        subject: "Skill Depth",
-        verified: radarMetrics.skillDepth,
-        claimed: Math.min(100, radarMetrics.skillDepth + 6),
-        fullMark: 100,
-      },
-      {
-        subject: "Commit Regularity",
-        verified: radarMetrics.commitRegularity,
-        claimed: Math.min(100, radarMetrics.commitRegularity + 8),
-        fullMark: 100,
-      },
-      {
-        subject: "Dependency Health",
-        verified: radarMetrics.dependencyHealth,
-        claimed: Math.min(100, radarMetrics.dependencyHealth + 3),
-        fullMark: 100,
-      },
-    ]
+    const totalRepoCommits = normalizedRepos.reduce((acc: number, r: any) => acc + (r.commits || 0), 0)
+    const exactCommits = data.totalCommits || (totalRepoCommits > 0 ? totalRepoCommits : (isSuspicious ? 14 : 17))
 
     const rawSkills = data.skills || []
-    const normalizedSkills =
-      rawSkills.length > 0
-        ? rawSkills.map(mapSkillToChart)
-        : fallbackMock?.skills.map((s, idx) => mapSkillToChart(s, idx)) || radarChart
-
-    const hasSkillChartData = normalizedSkills.some(
-      (s) => (Number(s.verified) || 0) > 0 || (Number(s.claimed) || 0) > 0,
-    )
-    const chartSkills = hasSkillChartData ? normalizedSkills : radarChart
+    const normalizedSkills = rawSkills.length > 0
+      ? rawSkills.map((s: any, idx: number) => ({
+          name: typeof s === "string" ? s : s?.name || "Systems Architecture",
+          level: typeof s === "object" ? s?.level || "Advanced" : "Advanced",
+          verified: typeof s === "object" && typeof s?.verified === "number" ? s.verified : isSuspicious ? 25 : 85 + (idx % 10),
+          claimed: typeof s === "object" && typeof s?.claimed === "number" ? s.claimed : isSuspicious ? 90 : 80,
+          repoCount: typeof s === "object" && typeof s?.repoCount === "number" ? s.repoCount : (idx + 2),
+          evidence: (typeof s === "object" && s?.evidence) || `AST nodes parsed across ${idx + 2} repositories`,
+        }))
+      : fallbackMock?.skills || [
+          { name: "Systems Architecture", level: "Advanced", verified: 92, claimed: 85, repoCount: 4, evidence: "High AST branching factor" },
+          { name: "Frontend Engineering", level: "Advanced", verified: 88, claimed: 80, repoCount: 3, evidence: "Clean component lifecycle" },
+        ]
 
     const rawAnomalies = data.anomalies || []
     const normalizedAnomalies = rawAnomalies.length > 0
@@ -365,18 +263,13 @@ export function SkillgraphApp() {
         }))
       : fallbackMock?.anomalies || []
 
-    const resolvedGrade =
-      complexityGrade ||
-      (baseScore >= 90 ? "A+" : baseScore >= 80 ? "A" : baseScore >= 60 ? "B" : "D")
-
     return {
-      ...data,
       handle: data.handle || data.username || targetUser,
-      name: data.name || (isSuspicious ? "Flagged Profile" : targetUser),
+      name: data.name || (isIntegrator ? "Smart Integrator" : isSuspicious ? "Flagged Profile" : targetUser),
       avatar: data.avatar || data.avatar_url || `https://github.com/${targetUser}.png`,
-      bio: data.bio || (isSuspicious ? "Independent developer exploring boilerplates" : "Full-stack engineer building distributed systems"),
+      bio: data.bio || (isIntegrator ? "System Integrator. Clones public boilerplates and introduces verified high-entropy custom logic." : isSuspicious ? "Independent developer exploring boilerplates" : "Full-stack engineer building distributed systems"),
       score: baseScore,
-      grade: resolvedGrade,
+      grade: isIntegrator ? "B+" : data.complexityGrade || (baseScore >= 90 ? "A+" : baseScore >= 80 ? "A" : baseScore >= 60 ? "B" : "D"),
       auditId: data.auditId || `AUD-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
       timestamp: data.timestamp || new Date().toISOString(),
       location: data.location || "Global",
@@ -390,17 +283,23 @@ export function SkillgraphApp() {
       metrics: {
         totalCommits: exactCommits,
         activeRepos: data.totalRepos || normalizedRepos.length,
-        avgComplexity: data.metrics?.avgComplexity ?? (isSuspicious ? 2.1 : 8.4),
-        cloneDetectionAUC: data.metrics?.cloneDetectionAUC ?? (isSuspicious ? 0.42 : 0.98),
-        entropyScore: typeof entropyScore === "number" && entropyScore <= 1 ? entropyScore : entropyPct / 100,
+        avgComplexity: data.metrics?.avgComplexity ?? (isIntegrator ? 7.4 : isSuspicious ? 2.1 : 8.4),
+        cloneDetectionAUC: data.metrics?.cloneDetectionAUC ?? (isIntegrator ? 0.95 : isSuspicious ? 0.42 : 0.98),
+        entropyScore: data.metrics?.entropyScore ?? (isIntegrator ? 0.82 : isSuspicious ? 0.31 : 0.91),
         astDepth: data.metrics?.astDepth ?? (isSuspicious ? 4 : 18),
       },
-      radar: radarMetrics,
-      radarChart,
-      skills: chartSkills,
+      radar: {
+        codeAuthenticity: baseScore,
+        gitEntropy: isIntegrator ? 82 : isSuspicious ? 30 : 88,
+        skillDepth: isIntegrator ? 85 : isSuspicious ? 25 : 92,
+        commitRegularity: isIntegrator ? 75 : isSuspicious ? 20 : 85,
+        dependencyHealth: isIntegrator ? 90 : isSuspicious ? 45 : 94,
+      },
+      skills: normalizedSkills,
       repositories: normalizedRepos,
       anomalies: normalizedAnomalies,
       questions: data.questions || fallbackMock?.questions || [],
+      ...data,
     } as Profile
   }
 
@@ -515,7 +414,7 @@ export function SkillgraphApp() {
   }
 
   return (
-    <div className="relative min-h-screen bg-background text-foreground font-sans selection:bg-primary/40 selection:text-white overflow-x-hidden">
+    <div className="relative min-h-screen bg-[#07090e] text-white font-sans selection:bg-white selection:text-black overflow-x-hidden">
       <SiteNav
         demoMode={demoMode}
         onDemoModeChange={(val) => {
@@ -580,14 +479,14 @@ export function SkillgraphApp() {
           >
             <div className="w-full md:w-[20%] mb-3 md:mb-0">
               <p className="font-bold text-white">ZERO · TRUST</p>
-              <p className="text-gray-500">CODE · AUDITOR</p>
+              <p className="text-gray-400">CODE · AUDITOR</p>
             </div>
 
             <div className="hidden md:flex items-center text-gray-500">
               <ArrowRight className="size-3.5" strokeWidth={1.5} />
             </div>
 
-            <div className="w-full md:w-[45%] text-gray-300 leading-relaxed font-mono">
+            <div className="w-full md:w-[45%] text-gray-400 leading-relaxed font-mono">
               Deterministic AST parsing, Git commit entropy analysis, and clone detection designed to unmask authentic software capability.
             </div>
 
@@ -609,17 +508,17 @@ export function SkillgraphApp() {
             className="lg:col-span-5 space-y-6"
           >
             <div className="flex items-center gap-3">
-              <span className="font-mono text-xs font-bold tracking-widest text-gray-500">01</span>
+              <span className="font-mono text-xs font-bold tracking-widest text-gray-400">01</span>
               <div className="w-16 h-[1.5px] bg-white/20" />
               <span className="font-mono text-xs uppercase tracking-widest text-gray-300">Forensic Code Intelligence</span>
             </div>
 
             <h1 className="text-4xl md:text-6xl font-normal tracking-tight leading-[1] text-white">
               SYNTACTIC <br />
-              <span className="font-semibold">VERIFICATION</span>
+              <span className="font-semibold text-white">VERIFICATION</span>
             </h1>
 
-            <p className="text-[13px] md:text-[14px] text-gray-300 max-w-md leading-relaxed">
+            <p className="text-[13px] md:text-[14px] text-gray-400 max-w-md leading-relaxed">
               Eliminate resume fraud and unauthored AI boilerplate. Inspect candidate repositories using abstract syntax trees and structural entropy.
             </p>
 
@@ -627,11 +526,10 @@ export function SkillgraphApp() {
               <button
                 type="button"
                 onClick={scrollToAudit}
-                className="group relative inline-flex items-center gap-3 bg-white px-7 py-4 border border-white/20 rounded-md shadow-sm overflow-hidden transition-all duration-300 hover:shadow-[0_0_24px_-4px_var(--primary)]"
+                className="group relative inline-flex items-center gap-3 bg-white px-7 py-4 border border-white rounded-md shadow-sm overflow-hidden transition-all duration-300 hover:bg-gray-200"
               >
-                <div className="absolute inset-0 bg-primary -translate-x-[101%] group-hover:translate-x-0 transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]" />
-                <Code2 className="size-4 relative z-10 text-background group-hover:text-white transition-transform duration-300 group-hover:scale-110" />
-                <span className="relative z-10 text-sm font-medium tracking-wider uppercase text-background group-hover:text-white transition-colors duration-300">
+                <Code2 className="size-4 relative z-10 text-black transition-transform duration-300 group-hover:scale-110" />
+                <span className="relative z-10 text-sm font-medium tracking-wider uppercase text-black font-mono">
                   Inspect Repository
                 </span>
               </button>
@@ -643,14 +541,14 @@ export function SkillgraphApp() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.9, delay: 0.5 }}
             id="audit-terminal"
-            className="lg:col-span-7 bg-black/40 text-white p-6 md:p-8 rounded-xl border border-white/10 shadow-2xl space-y-6 backdrop-blur-md"
+            className="lg:col-span-7 bg-[#0d1117] text-white p-6 md:p-8 rounded-xl border border-white/10 shadow-2xl space-y-6"
           >
             <div className="flex items-center justify-between border-b border-white/10 pb-4">
               <div className="flex items-center gap-2">
                 <div className="size-2.5 rounded-full bg-emerald-400 animate-pulse" />
                 <span className="font-mono text-xs uppercase tracking-widest text-gray-400">Zero-Trust Terminal</span>
               </div>
-              <span className="font-mono text-[11px] text-gray-500">
+              <span className="font-mono text-[11px] text-gray-400">
                 {demoMode ? "MOCK TELEMETRY" : "LIVE RENDER API"}
               </span>
             </div>
@@ -667,14 +565,14 @@ export function SkillgraphApp() {
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Enter GitHub handle (e.g. authentic-dev, tutorial-cloner, google)..."
+                placeholder="Enter GitHub handle (e.g. authentic-dev, smart-integrator, tutorial-cloner)..."
                 disabled={loading}
-                className="w-full bg-white/5 border border-white/10 text-white font-mono text-xs md:text-sm pl-11 pr-32 py-3.5 rounded-lg focus:outline-none focus:border-primary/50 transition-all placeholder:text-gray-500"
+                className="w-full bg-[#161b22] border border-white/15 text-white font-mono text-xs md:text-sm pl-11 pr-32 py-3.5 rounded-lg focus:outline-none focus:border-white transition-all placeholder:text-gray-500"
               />
               <button
                 type="submit"
                 disabled={loading || !query.trim()}
-                className="absolute right-2 px-4 py-2 bg-white text-background font-mono text-xs font-bold uppercase tracking-wider rounded-md transition-all hover:bg-gray-200 disabled:opacity-40"
+                className="absolute right-2 px-4 py-2 bg-white text-black font-mono text-xs font-bold uppercase tracking-wider rounded-md transition-all hover:bg-gray-200 disabled:opacity-40"
               >
                 {loading ? "Parsing..." : "Audit"}
               </button>
@@ -685,6 +583,7 @@ export function SkillgraphApp() {
               <div className="flex flex-wrap gap-2">
                 {[
                   { handle: "authentic-dev", label: "Authentic (92% Score)", badge: "border-emerald-500/40 text-emerald-400" },
+                  { handle: "smart-integrator", label: "Integrator (78% Score)", badge: "border-blue-500/40 text-blue-400" },
                   { handle: "tutorial-cloner", label: "Tutorial Cloner (18% Score)", badge: "border-red-500/40 text-red-400" },
                   { handle: "lazy-architect", label: "Lazy Architect (42% Score)", badge: "border-amber-500/40 text-amber-400" },
                   { handle: "google", label: "Bot Trap (>1K Repos)", badge: "border-purple-500/40 text-purple-400" },
@@ -693,7 +592,7 @@ export function SkillgraphApp() {
                     key={chip.handle}
                     type="button"
                     onClick={() => handlePersonaSelect(chip.handle)}
-                    className={`font-mono text-xs px-3 py-1.5 rounded-md border bg-black/50 transition-all hover:bg-white/10 ${chip.badge}`}
+                    className={`font-mono text-xs px-3 py-1.5 rounded-md border bg-black/50 transition-all hover:bg-white hover:text-black ${chip.badge}`}
                   >
                     @{chip.handle}
                   </button>
@@ -710,9 +609,9 @@ export function SkillgraphApp() {
       </section>
 
       {/* SECTION 2: FORENSIC ENGINE PILLARS */}
-      <section className="relative w-full min-h-[60vh] flex flex-col items-center justify-center py-20 px-6 md:px-16 border-b border-white/10">
+      <section className="relative w-full min-h-[60vh] bg-[#07090e] flex flex-col items-center justify-center py-20 px-6 md:px-16 border-b border-white/10">
         <div className="font-mono text-[11px] tracking-[0.2em] mb-8">
-          <span className="text-gray-500">[ 02 ]</span>{" "}
+          <span className="text-gray-400">[ 02 ]</span>{" "}
           <span className="font-bold text-white uppercase">Forensic Architecture</span>
         </div>
 
@@ -736,7 +635,7 @@ export function SkillgraphApp() {
           ].map((pill, idx) => (
             <div
               key={idx}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-full border border-white/10 bg-white/5 backdrop-blur-sm text-[11px] font-mono font-medium uppercase tracking-wider text-gray-300 transition-all hover:border-primary/50 hover:bg-primary/10 hover:text-white"
+              className="flex items-center gap-2 px-5 py-2.5 rounded-full border border-white/10 bg-white/5 backdrop-blur-sm text-[11px] font-mono font-medium uppercase tracking-wider text-gray-200 transition-all hover:border-white hover:bg-white hover:text-black"
             >
               <pill.icon className="size-3.5" strokeWidth={2} />
               <span>{pill.label}</span>
@@ -746,10 +645,10 @@ export function SkillgraphApp() {
       </section>
 
       {/* SECTION 3: DARK FORENSIC TELEMETRY CHAMBER */}
-      <section className="relative w-full bg-[#0a0a0a] text-white flex flex-col py-24 px-6 md:px-16 border-b border-gray-900">
+      <section className="relative w-full bg-[#05070a] text-white flex flex-col py-24 px-6 md:px-16 border-b border-white/10">
         <div className="flex flex-col xl:flex-row justify-between items-start mb-16 gap-8">
           <div>
-            <div className="font-mono text-xs uppercase tracking-widest text-gray-500 mb-3">[ 03 ] Deep Telemetry</div>
+            <div className="font-mono text-xs uppercase tracking-widest text-gray-400 mb-3">[ 03 ] Deep Telemetry</div>
             <h2 className="text-3xl md:text-5xl font-medium tracking-tight text-white max-w-2xl leading-tight">
               Curated from 10M+ analyzed AST nodes & syntactic signatures.
             </h2>
@@ -763,7 +662,7 @@ export function SkillgraphApp() {
               {["Deterministic", "Resilient", "Audited"].map((tag, i) => (
                 <span
                   key={i}
-                  className="px-3.5 py-1 rounded-full border border-gray-800 text-[10px] font-mono uppercase tracking-widest text-gray-400"
+                  className="px-3.5 py-1 rounded-full border border-white/10 text-[10px] font-mono uppercase tracking-widest text-gray-400"
                 >
                   {tag}
                 </span>
@@ -772,9 +671,9 @@ export function SkillgraphApp() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 border border-gray-800 rounded-xl overflow-hidden bg-black/40 backdrop-blur-md">
-          <div className="lg:col-span-5 p-8 flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-gray-800 min-h-[380px]">
-            <div className="flex justify-between items-center text-gray-500 font-mono text-xs">
+        <div className="grid grid-cols-1 lg:grid-cols-12 border border-white/10 rounded-xl overflow-hidden bg-black/40 backdrop-blur-md">
+          <div className="lg:col-span-5 p-8 flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-white/10 min-h-[380px]">
+            <div className="flex justify-between items-center text-gray-400 font-mono text-xs">
               <span>*** AST ENGINE</span>
               <span>SIGNATURE TRACE</span>
             </div>
@@ -790,20 +689,20 @@ export function SkillgraphApp() {
               </AnimatePresence>
             </div>
 
-            <div className="flex justify-between items-center text-[10px] font-mono uppercase tracking-widest text-gray-500">
+            <div className="flex justify-between items-center text-[10px] font-mono uppercase tracking-widest text-gray-400">
               <span>Chapter 0{activeChapter + 1} / 05</span>
               <span className="text-emerald-400 font-bold">{chaptersData[activeChapter].stat}</span>
             </div>
           </div>
 
-          <div className="lg:col-span-7 flex flex-col justify-center divide-y divide-gray-800">
+          <div className="lg:col-span-7 flex flex-col justify-center divide-y divide-white/10">
             {chaptersData.map((chapter, idx) => (
               <button
                 key={idx}
                 type="button"
                 onClick={() => setActiveChapter(idx)}
                 className={`p-6 text-left transition-all flex items-center justify-between group ${
-                  activeChapter === idx ? "bg-white/[0.04] text-white" : "text-gray-500 hover:text-gray-300"
+                  activeChapter === idx ? "bg-white/[0.04] text-white" : "text-gray-400 hover:text-gray-200"
                 }`}
               >
                 <div>
@@ -829,7 +728,7 @@ export function SkillgraphApp() {
       {/* SECTION 4: RESULTS DASHBOARD */}
       <AnimatePresence>
         {!loading && profile && (
-          <section ref={resultsRef} className="py-16 px-6 md:px-16 border-b border-white/10">
+          <section ref={resultsRef} className="py-16 px-6 md:px-16 border-b border-white/10 bg-[#07090e]">
             <ResultsDashboard key={profile.handle} profile={profile} />
           </section>
         )}
