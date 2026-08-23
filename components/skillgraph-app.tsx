@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useRef, useCallback, FormEvent, useId } from "react"
-import { motion, AnimatePresence, type Variants } from "motion/react"
+import { motion, AnimatePresence, useScroll, useTransform, type Variants } from "motion/react"
 import {
   ShieldCheck,
   GitCommit,
@@ -19,6 +19,7 @@ import { ResultsDashboard } from "@/components/results-dashboard"
 import { ApiDocs } from "@/components/api-docs"
 import { ToastStack, type Toast } from "@/components/toast-stack"
 import { RepoChatbot } from "@/components/dashboard/repo-chatbot"
+import { AstHologram } from "@/components/ui/ast-hologram"
 import { resolveProfile, type Profile } from "@/lib/mock-profiles"
 
 // ---------------------------------------------------------------------------
@@ -154,6 +155,12 @@ export function SkillgraphApp() {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [toasts, setToasts] = useState<Toast[]>([])
   const [activeChapter, setActiveChapter] = useState(0)
+
+  // Scroll Parallax Controls
+  const { scrollY } = useScroll()
+  const heroLogoScale = useTransform(scrollY, [0, 400], [1, 0.85])
+  const heroLogoOpacity = useTransform(scrollY, [0, 350], [1, 0.35])
+  const bgGridY = useTransform(scrollY, [0, 800], [0, 100])
 
   const resultsRef = useRef<HTMLElement | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -380,7 +387,6 @@ export function SkillgraphApp() {
         }
 
         if (!response.ok) {
-          // If GitHub user doesn't exist on live backend (404/500), fall back seamlessly to synthetic scan
           const synth = normalizeProfile({ handle: cleanUser, authenticityScore: 84 }, cleanUser)
           setProfile(synth)
           setLoading(false)
@@ -400,7 +406,6 @@ export function SkillgraphApp() {
           resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
         })
       } catch {
-        // Network timeout / Render cold start fallback
         const synth = normalizeProfile({ handle: cleanUser, authenticityScore: 84 }, cleanUser)
         setProfile(synth)
         setLoading(false)
@@ -438,7 +443,17 @@ export function SkillgraphApp() {
 
       {/* SECTION 1: HERO CONTAINER */}
       <section className="relative w-full min-h-screen flex flex-col justify-between pt-24 pb-16 px-6 md:px-16 border-b border-white/10 overflow-hidden">
+        {/* 3D AST Hologram Lattice Background */}
+        <AstHologram className="opacity-40" />
+
+        {/* Dynamic Parallax Cyber Grid */}
+        <motion.div
+          style={{ y: bgGridY }}
+          className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,#ffffff05_1px,transparent_1px),linear-gradient(to_bottom,#ffffff05_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)]"
+        />
+
         <motion.header
+          style={{ scale: heroLogoScale, opacity: heroLogoOpacity }}
           initial="initial"
           animate="animate"
           className="w-full flex flex-col items-start z-20 pt-4"
