@@ -11,7 +11,6 @@ import { RepoTable } from "@/components/dashboard/repo-table"
 import { CompareModal } from "@/components/dashboard/compare-modal"
 import { ExportModal } from "@/components/dashboard/export-modal"
 import { EngineTraceModal } from "@/components/dashboard/engine-trace-modal"
-import { RepoChatbot } from "@/components/dashboard/repo-chatbot"
 import type { Profile } from "@/lib/mock-profiles"
 
 export const ResultsDashboard = forwardRef<HTMLElement, { profile: Profile }>(function ResultsDashboard(
@@ -56,50 +55,48 @@ export const ResultsDashboard = forwardRef<HTMLElement, { profile: Profile }>(fu
               </h2>
             </div>
             
-            <div className="flex flex-wrap items-center gap-2.5">
-              {/* Feature 6: Live Engine Trace */}
-              <button
-                type="button"
-                onClick={() => setIsTraceOpen(true)}
-                className="flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-[11px] font-medium text-emerald-300 transition-all hover:bg-emerald-500/20 shadow-sm"
-              >
-                <Activity className="size-3.5 text-emerald-400" />
-                <span>Engine Trace</span>
-              </button>
+            <div className="flex flex-col items-start gap-3 sm:items-end">
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsTraceOpen(true)}
+                  className="flex items-center gap-2 rounded-lg border border-emerald-500/50 bg-emerald-500/10 px-3.5 py-2 text-[12px] font-medium text-emerald-400 transition-all duration-300 hover:scale-105 hover:bg-emerald-500/20"
+                >
+                  <Activity className="size-4" />
+                  <span>Engine Trace</span>
+                </button>
 
-              {/* Feature 5: Export Brief */}
-              <button
-                type="button"
-                onClick={() => setIsExportOpen(true)}
-                className="flex items-center gap-1.5 rounded-lg border border-border/60 bg-secondary/40 px-3 py-1.5 text-[11px] font-medium text-foreground transition-all hover:bg-secondary shadow-sm"
-              >
-                <FileDown className="size-3.5 text-indigo-400" />
-                <span>Export Brief</span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setIsExportOpen(true)}
+                  className="flex items-center gap-2 rounded-lg border border-indigo-500/50 bg-indigo-500/10 px-3.5 py-2 text-[12px] font-medium text-indigo-400 transition-all duration-300 hover:scale-105 hover:bg-indigo-500/20"
+                >
+                  <FileDown className="size-4" />
+                  <span>Export Brief</span>
+                </button>
 
-              {/* Feature 4: Verification Badge */}
-              <button
-                type="button"
-                onClick={handleCopyBadge}
-                className="flex items-center gap-1.5 rounded-lg border border-border/60 bg-secondary/40 px-3 py-1.5 text-[11px] font-medium text-foreground transition-all hover:bg-secondary shadow-sm"
-              >
-                {copiedBadge ? (
-                  <Check className="size-3.5 text-emerald-400" />
-                ) : (
-                  <ShieldCheck className="size-3.5 text-emerald-400" />
-                )}
-                <span>{copiedBadge ? "Badge Copied!" : "Embed Badge"}</span>
-              </button>
+                <button
+                  type="button"
+                  onClick={handleCopyBadge}
+                  className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3.5 py-2 text-[12px] font-medium text-gray-300 transition-all duration-300 hover:scale-105 hover:bg-white/10"
+                >
+                  {copiedBadge ? (
+                    <Check className="size-4 text-emerald-400" />
+                  ) : (
+                    <ShieldCheck className="size-4" />
+                  )}
+                  <span>{copiedBadge ? "Badge Copied!" : "Embed Badge"}</span>
+                </button>
 
-              {/* Feature 2: Candidate Comparison */}
-              <button
-                type="button"
-                onClick={() => setIsCompareOpen(true)}
-                className="flex items-center gap-1.5 rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-3 py-1.5 text-[11px] font-medium text-indigo-300 transition-all hover:bg-indigo-500/20 shadow-sm"
-              >
-                <ArrowRightLeft className="size-3.5" />
-                Compare Candidate ⇄
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setIsCompareOpen(true)}
+                  className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3.5 py-2 text-[12px] font-medium text-gray-300 transition-all duration-300 hover:scale-105 hover:bg-white/10"
+                >
+                  <ArrowRightLeft className="size-4" />
+                  Compare Candidate ⇄
+                </button>
+              </div>
 
               <div className="flex items-center gap-4 text-[12px] tracking-tight text-muted-foreground">
                 <span className="flex items-center gap-1.5">
@@ -153,8 +150,6 @@ export const ResultsDashboard = forwardRef<HTMLElement, { profile: Profile }>(fu
           onClose={() => setIsTraceOpen(false)}
         />
       )}
-
-      <RepoChatbot />
     </section>
   )
 })

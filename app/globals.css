@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
@@ -5,7 +6,7 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-inter), 'Inter', ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-mono-stack);
 
   --color-background: var(--background);
@@ -41,11 +42,13 @@
   --radius-xl: calc(var(--radius) * 1.4);
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
+
+  --ease-editorial: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 :root {
   color-scheme: dark;
-  --font-mono-stack: ui-monospace, 'SFMono-Regular', 'JetBrains Mono', Menlo, monospace;
+  --font-mono-stack: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
 
   /* slate-950 base */
   --background: oklch(0.145 0.028 265);
@@ -100,10 +103,16 @@
   }
   ::selection {
     background: color-mix(in oklab, var(--primary) 45%, transparent);
+    color: #ffffff;
   }
 }
 
 @layer utilities {
+  .text-mega {
+    font-size: clamp(3.5rem, 16vw, 13rem);
+    line-height: 0.82;
+    letter-spacing: -0.05em;
+  }
   .glass {
     background-color: color-mix(in oklab, var(--background) 55%, transparent);
     backdrop-filter: blur(16px) saturate(140%);
@@ -114,11 +123,19 @@
         color-mix(in oklab, var(--border) 55%, transparent) 1px,
         transparent 1px
       ),
-      linear-gradient(to bottom, color-mix(in oklab, var(--border) 55%, transparent) 1px, transparent 1px);
+      linear-gradient(
+        to bottom,
+        color-mix(in oklab, var(--border) 55%, transparent) 1px,
+        transparent 1px
+      );
     background-size: 64px 64px;
   }
   .radial-glow {
-    background: radial-gradient(60% 60% at 50% 0%, color-mix(in oklab, var(--primary) 22%, transparent), transparent 70%);
+    background: radial-gradient(
+      60% 60% at 50% 0%,
+      color-mix(in oklab, var(--primary) 22%, transparent),
+      transparent 70%
+    );
   }
   .tabular {
     font-variant-numeric: tabular-nums;

@@ -52,8 +52,8 @@ export function SiteNav({
   return (
     <header
       className={cn(
-        "no-print fixed inset-x-0 top-0 z-50 transition-all duration-500",
-        scrolled ? "border-b border-border/60 glass" : "border-b border-transparent",
+        "no-print fixed top-0 z-50 w-full border-b border-white/10 bg-background/60 backdrop-blur-md transition-all duration-500",
+        scrolled && "bg-background/80 shadow-[0_8px_32px_-16px_rgba(0,0,0,0.6)]",
       )}
     >
       <nav className="mx-auto flex h-16 w-full max-w-7xl items-center gap-4 px-6">

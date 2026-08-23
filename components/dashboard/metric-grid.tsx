@@ -17,17 +17,20 @@ export function MetricGrid({ profile }: { profile: Profile }) {
   const tone = scoreTone(score)
 
   // Safe property resolution across mock profiles and live backend schemas
-  const totalCommits =
+  const rawCommits =
     (profile as any).totalCommits ??
     (profile as any).commits ??
     (profile as any).metrics?.totalCommits ??
-    17
+    (profile as any).footprint?.commits ??
+    0
+  const totalCommits = Number.isFinite(Number(rawCommits)) ? Number(rawCommits) : 0
 
-  const activeRepos =
+  const rawRepos =
     (profile as any).footprint?.repos ??
     (profile as any).repositories?.length ??
     (profile as any).repos?.length ??
-    4
+    0
+  const activeRepos = Number.isFinite(Number(rawRepos)) ? Number(rawRepos) : 0
 
   const cloneAuc =
     (profile as any).cloneAuc ??
