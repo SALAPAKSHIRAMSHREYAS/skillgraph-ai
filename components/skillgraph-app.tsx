@@ -9,6 +9,7 @@ import { CommandCenter } from "@/components/command-center"
 import { ResultsDashboard } from "@/components/results-dashboard"
 import { ApiDocs } from "@/components/api-docs"
 import { ToastStack, type Toast } from "@/components/toast-stack"
+import { RepoChatbot } from "@/components/dashboard/repo-chatbot"
 import { resolveProfile, type Profile } from "@/lib/mock-profiles"
 
 export function SkillgraphApp() {
@@ -37,11 +38,15 @@ export function SkillgraphApp() {
       targetUser.includes("clone") ||
       targetUser.includes("fake") ||
       targetUser.includes("tutorial") ||
-      (data.score && data.score < 50)
+      (typeof data?.score === "number" && data.score < 50) ||
+      (typeof data?.authenticityScore === "number" && data.authenticityScore < 50)
 
-    const baseScore = typeof data.score === "number" && data.score > 0
-      ? data.score
-      : isSuspicious ? 34 : 94
+    const baseScore =
+      typeof data.authenticityScore === "number"
+        ? data.authenticityScore
+        : typeof data.score === "number" && data.score > 0
+          ? data.score
+          : isSuspicious ? 18 : 94
 
     const fallbackMock = resolveProfile(isSuspicious ? "tutorial-cloner" : "authentic-dev")
 
@@ -49,37 +54,42 @@ export function SkillgraphApp() {
     const normalizedRepos = rawRepos.length > 0
       ? rawRepos.map((r: any, idx: number) => ({
           name: r.name || `repo-${idx + 1}`,
-          language: r.language || (idx % 2 === 0 ? "TypeScript" : "Python"),
+          language: r.lang || r.language || (idx % 2 === 0 ? "TypeScript" : "Python"),
           originality: r.originality ?? r.authenticity ?? (isSuspicious ? 22 : 92),
           commits: r.commits ?? (isSuspicious ? 2 : 10),
           lastPush: r.lastPush || "Recent",
           status: (r.status?.toLowerCase() === "verified" || (!isSuspicious && idx < 3)) ? "verified" : "flagged",
         }))
-      : fallbackMock?.repositories || []
+      : fallbackMock?.repositories || [
+          { name: "core-pipeline", language: "Python", originality: 95, commits: 12, lastPush: "1d ago", status: "verified" },
+          { name: "api-gateway", language: "TypeScript", originality: 91, commits: 8, lastPush: "3d ago", status: "verified" }
+        ]
 
-    // Sum up exact commits across all retrieved repositories
     const totalRepoCommits = normalizedRepos.reduce((acc: number, r: any) => acc + (r.commits || 0), 0)
-    const exactCommits = totalRepoCommits > 0 ? totalRepoCommits : (isSuspicious ? 14 : 11)
+    const exactCommits = data.totalCommits || (totalRepoCommits > 0 ? totalRepoCommits : (isSuspicious ? 14 : 17))
 
     const rawSkills = data.skills || []
     const normalizedSkills = rawSkills.length > 0
       ? rawSkills.map((s: any, idx: number) => ({
-          name: typeof s === "string" ? s : s.name || "Software Architecture",
+          name: typeof s === "string" ? s : s.name || "Systems Architecture",
           level: typeof s === "object" ? s.level || "Advanced" : "Advanced",
           verified: s.verified ?? (isSuspicious ? 25 : 85 + (idx % 10)),
           claimed: s.claimed ?? (isSuspicious ? 90 : 80),
           repoCount: s.repoCount ?? (idx + 2),
           evidence: s.evidence || `AST nodes parsed across ${idx + 2} repositories`,
         }))
-      : fallbackMock?.skills || []
+      : fallbackMock?.skills || [
+          { name: "Systems Architecture", level: "Advanced", verified: 92, claimed: 85, repoCount: 4, evidence: "High AST branching factor" },
+          { name: "Frontend Engineering", level: "Advanced", verified: 88, claimed: 80, repoCount: 3, evidence: "Clean component lifecycle" }
+        ]
 
     const rawAnomalies = data.anomalies || []
     const normalizedAnomalies = rawAnomalies.length > 0
       ? rawAnomalies.map((a: any, idx: number) => ({
           id: a.id || `anom-${idx}`,
           severity: a.severity || (a.type === "danger" ? "high" : a.type === "warning" ? "medium" : "low"),
-          title: a.title || "Commit Entropy Deviation",
-          description: a.desc || a.description || "Unusual pattern detected in repository history.",
+          title: a.title || "AST Structural Indicator",
+          description: a.desc || a.description || "Syntactic pattern verified in repository history.",
           rule: a.rule || "RULE_AST_HEURISTIC",
           detectedAt: a.detectedAt || "Recent scan",
           repo: a.repo || normalizedRepos[0]?.name || "main-repo",
@@ -88,16 +98,16 @@ export function SkillgraphApp() {
 
     return {
       handle: data.handle || data.username || targetUser,
-      name: data.name || (isSuspicious ? "Alex Vance (Flagged)" : targetUser),
+      name: data.name || (isSuspicious ? "Flagged Profile" : targetUser),
       avatar: data.avatar || data.avatar_url || `https://github.com/${targetUser}.png`,
       bio: data.bio || (isSuspicious ? "Independent developer exploring boilerplates" : "Full-stack engineer building distributed systems"),
       score: baseScore,
-      grade: baseScore >= 90 ? "A+" : baseScore >= 80 ? "A" : baseScore >= 60 ? "B" : "C",
+      grade: data.complexityGrade || (baseScore >= 90 ? "A+" : baseScore >= 80 ? "A" : baseScore >= 60 ? "B" : "D"),
       auditId: data.auditId || `AUD-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
       timestamp: data.timestamp || new Date().toISOString(),
       location: data.location || "Global",
       footprint: {
-        repos: normalizedRepos.length,
+        repos: data.totalRepos || normalizedRepos.length,
         commits: exactCommits,
         activeDays: data.footprint?.activeDays ?? (isSuspicious ? 8 : 164),
         languages: data.footprint?.languages ?? (isSuspicious ? 2 : 4),
@@ -105,7 +115,7 @@ export function SkillgraphApp() {
       },
       metrics: {
         totalCommits: exactCommits,
-        activeRepos: normalizedRepos.length,
+        activeRepos: data.totalRepos || normalizedRepos.length,
         avgComplexity: data.metrics?.avgComplexity ?? (isSuspicious ? 2.1 : 8.4),
         cloneDetectionAUC: data.metrics?.cloneDetectionAUC ?? (isSuspicious ? 0.42 : 0.98),
         entropyScore: data.metrics?.entropyScore ?? (isSuspicious ? 0.31 : 0.91),
@@ -121,7 +131,7 @@ export function SkillgraphApp() {
       skills: normalizedSkills,
       repositories: normalizedRepos,
       anomalies: normalizedAnomalies,
-      questions: fallbackMock?.questions || [],
+      questions: data.questions || fallbackMock?.questions || [],
       ...data,
     } as Profile
   }
@@ -151,7 +161,7 @@ export function SkillgraphApp() {
       return
     }
 
-    // Known spam / massive bot trap handles (instant demo verification)
+    // High-volume bot/spam trap handles
     const highVolumeOrgs = ["google", "microsoft", "apache", "aws", "sindresorhus"]
     if (highVolumeOrgs.includes(cleanUser.toLowerCase()) && demoMode) {
       timerRef.current = setTimeout(() => {
@@ -298,6 +308,10 @@ export function SkillgraphApp() {
         </div>
       </footer>
 
+      {/* Floating Chatbot Widget (Always Mounted) */}
+      <RepoChatbot />
+
+      {/* Security Toast Notifications */}
       <ToastStack toasts={toasts} />
     </div>
   )
