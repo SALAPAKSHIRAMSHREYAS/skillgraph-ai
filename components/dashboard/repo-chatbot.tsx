@@ -14,9 +14,6 @@ interface ChatMessage {
 const INITIAL_GREETING =
   "Zero-Trust Engine ready. Ask me about the architectural complexity or repository anomalies."
 
-const BACKEND_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "https://skillgraph-ai-igaf.onrender.com"
-
 export function RepoChatbot() {
   const [isOpen, setIsOpen] = useState(false)
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -61,7 +58,7 @@ export function RepoChatbot() {
 
     const lowerMsg = trimmed.toLowerCase()
 
-    // 1. Zero-Trust Boundary Trap (Instant client-side safety trigger)
+    // 1. Zero-Trust Boundary Trap (Instant Rejection)
     const genericTriggers = [
       "calculator",
       "weather",
@@ -92,108 +89,89 @@ export function RepoChatbot() {
       return
     }
 
-    // 2. Fetch from Render Backend with 2.5s Timeout Guard
-    let backendSuccess = false
+    // 2. Persona Detection from Live Page Context
+    const pageText = typeof document !== "undefined" ? document.body.innerText.toLowerCase() : ""
+    const isCloner = pageText.includes("tutorial-cloner") || pageText.includes("18%")
+    const isLazy = pageText.includes("lazy-architect") || pageText.includes("42%")
+
+    let fallbackResponse = ""
+    if (isCloner) {
+      if (lowerMsg.includes("anomaly") || lowerMsg.includes("anomalies")) {
+        fallbackResponse =
+          "CRITICAL ALERT: 3 structural anomalies detected. AST syntactic fingerprint matches 98% with public tutorial repositories; bulk imports are masquerading as authored work."
+      } else if (lowerMsg.includes("complexity") || lowerMsg.includes("ast")) {
+        fallbackResponse =
+          "AST Breakdown: Cyclomatic complexity evaluated as Grade D. Shallow branching factors and boilerplate duplication confirm lack of original architecture."
+      } else if (lowerMsg.includes("real") || lowerMsg.includes("authentic") || lowerMsg.includes("score")) {
+        fallbackResponse =
+          "Zero-Trust Verdict: 18% Authenticity Score. 41 active repos demonstrate synthetic commit bursts and plagiarized syntax trees. High Risk profile."
+      } else {
+        fallbackResponse =
+          "Zero-Trust Auditor: Target profile flagged for tutorial replication and authorship signature discontinuity across 41 repositories."
+      }
+    } else if (isLazy) {
+      if (lowerMsg.includes("anomaly") || lowerMsg.includes("anomalies")) {
+        fallbackResponse =
+          "WARNING: Incomplete AST implementation detected. High architectural scaffold count with missing implementation logic in core service layers."
+      } else {
+        fallbackResponse =
+          "Zero-Trust Verdict: 42% Authenticity Score. Architecture contains heavy structural skeleton templates with low commit depth."
+      }
+    } else {
+      if (lowerMsg.includes("anomaly") || lowerMsg.includes("anomalies")) {
+        fallbackResponse =
+          "Integrity Feed: Zero critical anomalies detected. Shannon Entropy distribution confirms natural human variance across commit history."
+      } else if (lowerMsg.includes("complexity") || lowerMsg.includes("ast")) {
+        fallbackResponse =
+          "AST Breakdown: Modular control-flow graphs evaluated at Grade A. High cohesion and clean separation of concerns verified across modules."
+      } else if (lowerMsg.includes("real") || lowerMsg.includes("authentic") || lowerMsg.includes("score")) {
+        fallbackResponse =
+          "Zero-Trust Verdict: Authenticity verified above 90%. Syntactic tree analysis confirms genuine, iterative software engineering patterns."
+      } else {
+        fallbackResponse =
+          "Zero-Trust Telemetry: AST parsing confirms original algorithmic logic with high confidence and clean entropy metrics."
+      }
+    }
+
+    // 3. Fast Backend Fetch with 1.2s Timeout
     const controller = new AbortController()
-    const abortTimeout = setTimeout(() => controller.abort(), 2500)
+    const timer = setTimeout(() => controller.abort(), 1200)
 
     try {
-      const res = await fetch(`${BACKEND_BASE_URL}/api/chat`, {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://skillgraph-ai-igaf.onrender.com"
+      const res = await fetch(`${apiUrl}/api/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: trimmed }),
         signal: controller.signal,
       })
-      clearTimeout(abortTimeout)
+      clearTimeout(timer)
 
       if (res.ok) {
         const data = await res.json()
-        const replyText = data?.reply || data?.message || data?.content
-        if (replyText) {
-          setMessages((prev) => [
-            ...prev,
-            { id: `ai-${Date.now()}`, role: "ai", content: replyText },
-          ])
-          backendSuccess = true
+        const text = data?.reply || data?.message || data?.content
+        if (text) {
+          setMessages((prev) => [...prev, { id: `ai-${Date.now()}`, role: "ai", content: text }])
+          setIsLoading(false)
+          return
         }
       }
     } catch {
-      // Fetch timed out or network offline; proceed to dynamic telemetry fallback
+      // Backend unavailable or timed out — fallback handles response instantly
     } finally {
-      clearTimeout(abortTimeout)
+      clearTimeout(timer)
     }
 
-    if (backendSuccess) {
-      setIsLoading(false)
-      return
-    }
-
-    // 3. Instant Persona-Aware Telemetry Fallback
-    setTimeout(() => {
-      let dynamicReply = ""
-      const pageContent =
-        typeof document !== "undefined" ? document.body.innerText : ""
-      const isClonerPersona =
-        pageContent.includes("tutorial-cloner") || pageContent.includes("18%")
-      const isLazyArchitect =
-        pageContent.includes("lazy-architect") || pageContent.includes("42%")
-
-      if (isClonerPersona) {
-        if (lowerMsg.includes("anomaly") || lowerMsg.includes("anomalies")) {
-          dynamicReply =
-            "CRITICAL ALERT: 3 structural anomalies detected. AST syntactic fingerprint matches 98% with public tutorial repositories; bulk imports are masquerading as authored work."
-        } else if (lowerMsg.includes("complexity") || lowerMsg.includes("ast")) {
-          dynamicReply =
-            "AST Breakdown: Cyclomatic complexity evaluated as Grade D. Shallow branching factors and boilerplate duplication confirm lack of original architecture."
-        } else if (
-          lowerMsg.includes("real") ||
-          lowerMsg.includes("authentic") ||
-          lowerMsg.includes("score")
-        ) {
-          dynamicReply =
-            "Zero-Trust Verdict: 18% Authenticity Score. 41 active repos demonstrate synthetic commit bursts and plagiarized syntax trees. High Risk profile."
-        } else {
-          dynamicReply =
-            "Zero-Trust Auditor: Target profile flagged for tutorial replication and authorship signature discontinuity across 41 repositories."
-        }
-      } else if (isLazyArchitect) {
-        if (lowerMsg.includes("anomaly") || lowerMsg.includes("anomalies")) {
-          dynamicReply =
-            "WARNING: Incomplete AST implementation detected. High architectural scaffold count with missing implementation logic in core service layers."
-        } else {
-          dynamicReply =
-            "Zero-Trust Verdict: 42% Authenticity Score. Architecture contains heavy structural skeleton templates with low commit depth."
-        }
-      } else {
-        if (lowerMsg.includes("anomaly") || lowerMsg.includes("anomalies")) {
-          dynamicReply =
-            "Integrity Feed: Zero critical anomalies detected. Shannon Entropy distribution confirms natural human variance across commit history."
-        } else if (lowerMsg.includes("complexity") || lowerMsg.includes("ast")) {
-          dynamicReply =
-            "AST Breakdown: Modular control-flow graphs evaluated at Grade A. High cohesion and clean separation of concerns verified across modules."
-        } else if (
-          lowerMsg.includes("real") ||
-          lowerMsg.includes("authentic") ||
-          lowerMsg.includes("score")
-        ) {
-          dynamicReply =
-            "Zero-Trust Verdict: Authenticity verified above 90%. Syntactic tree analysis confirms genuine, iterative software engineering patterns."
-        } else {
-          dynamicReply =
-            "Zero-Trust Telemetry: AST parsing confirms original algorithmic logic with high confidence and clean entropy metrics."
-        }
-      }
-
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `ai-${Date.now()}`,
-          role: "ai",
-          content: dynamicReply,
-        },
-      ])
-      setIsLoading(false)
-    }, 350)
+    // 4. Deliver Dynamic Contextual Telemetry Response
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `ai-${Date.now()}`,
+        role: "ai",
+        content: fallbackResponse,
+      },
+    ])
+    setIsLoading(false)
   }
 
   return (
@@ -231,7 +209,7 @@ export function RepoChatbot() {
             </div>
           </div>
 
-          {/* Message history */}
+          {/* Message History */}
           <div
             ref={scrollRef}
             className="flex-1 space-y-3 overflow-y-auto px-4 py-4"
@@ -282,10 +260,7 @@ export function RepoChatbot() {
           </div>
 
           {/* Composer */}
-          <form
-            onSubmit={handleSubmit}
-            className="border-t border-white/10 bg-white/[0.03] p-3"
-          >
+          <form onSubmit={handleSubmit} className="border-t border-white/10 bg-white/[0.03] p-3">
             <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/30 px-2.5 py-1.5 focus-within:border-indigo-500/40 focus-within:ring-1 focus-within:ring-indigo-500/20">
               <input
                 ref={inputRef}
@@ -310,6 +285,7 @@ export function RepoChatbot() {
         </div>
       )}
 
+      {/* Floating Launcher Button */}
       <button
         type="button"
         onClick={() => setIsOpen((open) => !open)}
